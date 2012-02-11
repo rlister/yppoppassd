@@ -1,0 +1,119 @@
+= yppoppassd - Eudora password change server
+
+== Introduction
+
+This is old code and unmaintained, but I'm making it available on
+github in case someone finds it useful.
+
+== Where to get it
+
+http://github.com/rlister/yppoppassd
+
+== The Problem
+
+The Eudora mail client uses a special protocol to change a user's
+password on the POP3 server. This doesn't work for unix POP servers. 
+
+== The Solution
+
+Write a server daemon that runs on the POP server and listens for
+password change requests from Eudora clients. 
+
+Several examples of such a server are provided by Qualcomm
+(the owners of Eudora). They work by opening a terminal to hold
+a conversation with (usually) /bin/passwd. This is problematic if
+your version of /bin/passwd uses a different syntax (especially
+true if it is actually yppasswd). 
+
+yppoppassd solves the problem for servers using YP/NIS to serve
+passwords by opening an RPC connection to rpc.yppasswdd to change
+the password. If you don't use NIS, but do use PAM check out Pawel
+Krawczyk's version below. 
+
+== The Protocol
+
+The server code from Qualcomm describes the protocol as follows. 
+
+    The server's responses should be like an FTP server's responses;
+    1xx for in progress, 2xx for success, 3xx for more information
+    needed, 4xx for temporary failure, and 5xx for permanent failure.
+    Putting it all together, here's a sample conversation:
+       
+    S: 200 hello\r\n
+    E: user yourloginname\r\n
+    S: 300 please send your password now\r\n
+    E: pass yourcurrentpassword\r\n
+    S: 200 My, that was tasty\r\n
+    E: newpass yournewpassword\r\n
+    S: 200 Happy to oblige\r\n
+    E: quit\r\n
+    S: 200 Bye-bye\r\n
+    S: <closes connection>
+    E: <closes connection>
+
+In practice all the servers I've seen use only the 200 and 500 codes. 
+
+Eudora uses port 106, which has already been assigned to a different
+service (3com-tsmux). Naughty naughty. You will need to edit your
+/etc/services. 
+
+== Installation
+
+Edit the Makefile to suit your system and type 'make'.
+
+It might even compile on your system. Put the binary somewhere
+sensible, such as /usr/sbin.
+
+Add something like the following line to /etc/services:
+
+  yppoppassd      106/tcp                         # Eudora passwd protocol
+
+Add the daemon to /etc/inetd.conf; I recommend you use tcp wrappers
+to tighten access privileges:
+
+  yppoppassd stream tcp   nowait  root    /usr/sbin/tcpd  yppoppassd
+
+kill -HUP the inetd process to reread inetd.conf.
+
+You should be ready to go. Try it out a few timed and keep an eye
+on the syslog as yppoppassd is fairly verbose with the syslog() calls.
+
+If you have problems compiling or running yppoppassd please let
+me know (at the email address below) and we'll try to figure out
+what went wrong.
+
+== Security
+
+The protocol itself is fairly insecure, passing unencrypted passwords
+over the network, though this is really no worse than running passwd
+over an insecure telnet.
+
+You should definitely run under TCP wrappers and deny connection to
+all but necessary hosts. Additionally, if you are only using a web
+client (such as the one provided) and not Eudora or some other,
+consider running yppoppassd on your webserver and sending all
+requests from the client to 'localhost'.
+
+== Clients
+
+Apart from Eudora there are several clients available. See the URL
+above for links.
+
+This tarball also includes a sample CGI client using Perl with CGI
+and Socket modules.
+
+== Credits
+
+Framework for the server-client conversation and protocol details
+came from poppassd by John Norstad <j-norstad@nwu.edu> and others.
+
+Implementation details for the RPC calls to rpc.yppasswdd came from
+the yppasswd written by Olaf Kirch <okir@monad.swb.de> and
+maintained in the Linux NIS tools distribution by Thorsten Kukuk
+<kukuk@suse.de>.
+
+Enjoy.
+
+== Copyright
+
+Copyright (c) 2000 Richard Lister.
